@@ -1,0 +1,14 @@
+sim=require'sim'
+
+conveyor=require('models.efficientconveyor_customization-3')
+
+-- To command the conveyor externally or from another script, simply do:
+--
+-- sim.setBufferProperty(conveyorHandle, 'customData.__ctrl__', sim.packTable({vel=0.1})) -- vel. ctrl
+--
+-- or:
+--
+-- sim.setBufferProperty(conveyorHandle, 'customData.__ctrl__', sim.packTable({pos=0.1})) -- pos. ctrl
+--
+-- Its current state can be read with:
+-- local data=sim.readCustomTableData(conveyorHandle,'__state__')

@@ -1,0 +1,105 @@
+sim = require 'sim'
+
+-- Initialization
+function sysCall_init()
+    -- Dobot Object Handles
+    dobotHandle = sim.getObject('/Dobot')
+    gripperHandle = sim.getObject('/Dobot/suctionCup_link2')
+
+    -- Motor Handles
+    motorHandles = {}
+    for i = 1, 4 do
+        motorHandles[i] = sim.getObject('/Dobot/motor' .. i)
+    end
+
+    -- Motion Parameters
+    local vel = 22
+    local accel = 40
+    local jerk = 80
+    maxVel = {vel * math.pi / 180, vel * math.pi / 180, vel * math.pi / 180, vel * math.pi / 180}
+    maxAccel = {accel * math.pi / 180, accel * math.pi / 180, accel * math.pi / 180, accel * math.pi / 180}
+    maxJerk = {jerk * math.pi / 180, jerk * math.pi / 180, jerk * math.pi / 180, jerk * math.pi / 180}
+
+    -- Positions
+    homePose = {0, 0, 0, 0}
+    pickUpPose1 = {-20 * math.pi / 180, 0, 0, 0}
+    pickUpPose2 = {-20 * math.pi / 180, 50 * math.pi / 180, 47 * math.pi / 180, 0}
+    dropPoseGreen = {110 * math.pi / 180, 0, 0, 0}
+    dropPoseRed = {-110 * math.pi / 180, 0, 0, 0}
+
+    -- Initialize detection status
+    sim.writeCustomDataBlock(dobotHandle, 'objectDetected', 'none')
+
+    -- Coroutine setup
+    corout = coroutine.create(coroutineMain)
+end
+
+function sysCall_actuation()
+    if coroutine.status(corout) ~= 'dead' then
+        local ok, errorMsg = coroutine.resume(corout)
+        if errorMsg then
+            error(debug.traceback(corout, errorMsg), 2)
+        end
+    else
+        corout = coroutine.create(coroutineMain)
+    end
+end
+
+function moveToConfig(handles, maxVel, maxAccel, maxJerk, targetConf, enableGripper)
+    local params = {
+        joints = handles,
+        targetPos = targetConf,
+        maxVel = maxVel,
+        maxAccel = maxAccel,
+        maxJerk = maxJerk,
+    }
+    sim.moveToConfig(params)
+
+    -- Gripper Activation
+    if enableGripper then
+        sim.writeCustomStringData(gripperHandle, 'activity', 'on')
+    else
+        sim.writeCustomStringData(gripperHandle, 'activity', 'off')
+    end
+end
+
+function coroutineMain()
+    while true do
+        -- Wait until an object is detected
+        local detectionStatus = sim.readCustomDataBlock(dobotHandle, 'objectDetected') or 'none'
+
+        if detectionStatus == 'green' then
+            moveToConfig(motorHandles, maxVel, maxAccel, maxJerk, pickUpPose1, false)
+            moveToConfig(motorHandles, maxVel, maxAccel, maxJerk, pickUpPose2, true)
+            moveToConfig(motorHandles, maxVel, maxAccel, maxJerk, pickUpPose1, true)
+            moveToConfig(motorHandles, maxVel, maxAccel, maxJerk, dropPoseGreen, true)
+
+            -- Release the green object
+            sim.writeCustomStringData(gripperHandle, 'activity', 'off')
+            sim.wait(0.5)
+
+            moveToConfig(motorHandles, maxVel, maxAccel, maxJerk, homePose, false)
+
+            -- Reset detection
+            sim.writeCustomDataBlock(dobotHandle, 'objectDetected', 'none')
+
+        elseif detectionStatus == 'red' then
+            moveToConfig(motorHandles, maxVel, maxAccel, maxJerk, pickUpPose1, false)
+            moveToConfig(motorHandles, maxVel, maxAccel, maxJerk, pickUpPose2, true)
+            moveToConfig(motorHandles, maxVel, maxAccel, maxJerk, pickUpPose1, true)
+            moveToConfig(motorHandles, maxVel, maxAccel, maxJerk, dropPoseRed, true)
+
+            -- Release the red object
+            sim.writeCustomStringData(gripperHandle, 'activity', 'off')
+            sim.wait(0.5)
+
+            moveToConfig(motorHandles, maxVel, maxAccel, maxJerk, homePose, false)
+
+            -- Reset detection
+            sim.writeCustomDataBlock(dobotHandle, 'objectDetected', 'none')
+        else
+            -- Wait for an object to be detected
+            sim.wait(0.1)
+        end
+    end
+end
